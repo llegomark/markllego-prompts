@@ -8,7 +8,7 @@
 
     try {
       const options = t[1]
-      const body = JSON.parse(options.body)  
+      const body = JSON.parse(options.body)
       const prompt = body.messages[0].content.parts[0]
       body.messages[0].content.parts[0] = template.prompt.replace('[INSERT]', prompt)
       selectPromptTemplate(null)
@@ -22,33 +22,33 @@
   const observer = new MutationObserver(mutations => {
     mutations.forEach(mutation => {
       if (mutation.type !== 'childList')
-      if (mutation.addedNodes.length == 0) return
+        if (mutation.addedNodes.length == 0) return
       const node = mutation.addedNodes[0]
       if (!node || !node.querySelector) return
       handleElementAdded(node)
     })
   })
-  
+
   observer.observe(document.body, { subtree: true, childList: true })
 
   fetch('')
-  .then(res => res.text())
-  .then(csv => CSVToArray(csv))
-  .then(records => {
-    return records.map(([ category, title, teaser, prompt, placeholder ]) => {
-      return { category, title, teaser, prompt, placeholder }
+    .then(res => res.text())
+    .then(csv => CSVToArray(csv))
+    .then(records => {
+      return records.map(([category, title, teaser, prompt, placeholder]) => {
+        return { category, title, teaser, prompt, placeholder }
+      })
+        .filter(({ title }) => title && title !== 'title')
     })
-    .filter(({ title }) => title && title !== 'title')
-  })
-  .then(templates => {
-    window.prompttemplates = templates
-    insertPromptTemplatesSection()
-  })
+    .then(templates => {
+      window.prompttemplates = templates
+      insertPromptTemplatesSection()
+    })
 
   setupSidebar()
 })()
 
-function handleElementAdded (e) {
+function handleElementAdded(e) {
   if (e.id === 'headlessui-portal-root') {
     setupSidebar()
     return
@@ -73,7 +73,7 @@ function handleElementAdded (e) {
 
 }
 
-function setupSidebar () {
+function setupSidebar() {
   addExportButton()
   const buttons = getNewChatButtons()
   buttons.forEach(button => {
@@ -83,9 +83,9 @@ function setupSidebar () {
   })
 }
 
-function addExportButton () {
+function addExportButton() {
   const nav = document.querySelector('nav')
-  if (!nav || nav.querySelector('#export-button')) return 
+  if (!nav || nav.querySelector('#export-button')) return
 
   const button = document.createElement('a')
   button.id = 'export-button'
@@ -96,12 +96,12 @@ function addExportButton () {
   if (document.querySelector('.flex-1.overflow-hidden h1')) {
     button.style = 'pointer-events: none;opacity: 0.5'
   }
-  
+
   const colorModeButton = [...nav.children].find(child => child.innerText.includes('Mode'))
   nav.insertBefore(button, colorModeButton)
 }
 
-function getNewChatButtons (callback) {
+function getNewChatButtons(callback) {
   const sidebar = document.querySelector('nav')
   const topbar = document.querySelector('.sticky')
   const newChatButton = [...sidebar?.querySelectorAll('.cursor-pointer') ?? []].find(e => e.innerText === 'New Chat')
@@ -111,10 +111,10 @@ function getNewChatButtons (callback) {
 
 const promptTemplateSection = {
   currentPage: 0,
-  pageSize: 5
+  pageSize: 1
 }
 
-function insertPromptTemplatesSection () {
+function insertPromptTemplatesSection() {
   const title = document.querySelector('h1.text-4xl')
   if (!title) return
 
@@ -128,7 +128,7 @@ function insertPromptTemplatesSection () {
   if (!parent) return
 
   parent.classList.remove('md:h-full')
-  
+
   const { currentPage, pageSize } = promptTemplateSection
   const start = pageSize * currentPage
   const end = Math.min(pageSize * (currentPage + 1), templates.length)
@@ -142,9 +142,8 @@ function insertPromptTemplatesSection () {
       ${currentTemplates.map((template, i) => `
         <button onclick="selectPromptTemplate(${start + i})" class="${css`card`}">
           <h3 class="${css`h3`}">${template.title}</h3>
-          <p class="${css`p`}">${
-            template.teaser
-          }</p>
+          <p class="${css`p`}">${template.teaser
+    }</p>
           <span class="font-medium">Use prompt →</span>
         </button>
       `).join('')}
@@ -165,38 +164,38 @@ function insertPromptTemplatesSection () {
   let wrapper = document.createElement('div')
   wrapper.id = 'templates-wrapper'
   wrapper.className = 'mt-6 flex items-start text-center gap-3.5'
-  
+
   if (parent.querySelector('#templates-wrapper')) {
     wrapper = parent.querySelector('#templates-wrapper')
   } else {
     parent.appendChild(wrapper)
   }
-  
+
   wrapper.innerHTML = html
 }
 
-function prevPromptTemplatesPage () {
+function prevPromptTemplatesPage() {
   promptTemplateSection.currentPage--
   promptTemplateSection.currentPage = Math.max(0, promptTemplateSection.currentPage)
   insertPromptTemplatesSection()
 }
 
-function nextPromptTemplatesPage () {
+function nextPromptTemplatesPage() {
   const templates = window.prompttemplates
   if (!templates || !Array.isArray(templates)) return
 
   promptTemplateSection.currentPage++
   promptTemplateSection.currentPage = Math.min(
     Math.floor(
-    (templates.length - 1) /
-    promptTemplateSection.pageSize
+      (templates.length - 1) /
+      promptTemplateSection.pageSize
     ),
     promptTemplateSection.currentPage
   )
   insertPromptTemplatesSection()
 }
 
-function addCopyButton (buttonGroup) {
+function addCopyButton(buttonGroup) {
   const button = document.createElement('button')
   button.onclick = () => {
     const text = buttonGroup.parentElement.innerText
@@ -207,7 +206,7 @@ function addCopyButton (buttonGroup) {
   buttonGroup.prepend(button)
 }
 
-function exportCurrentChat () {
+function exportCurrentChat() {
   const blocks = [...document.querySelector('.flex.flex-col.items-center').children]
   let markdown = blocks.map(block => {
     let wrapper = block.querySelector('.whitespace-pre-wrap')
@@ -221,28 +220,28 @@ function exportCurrentChat () {
     }
 
     wrapper = wrapper.firstChild
-     
+
     return '**ChatGPT:**\n' + [...wrapper.children].map(node => {
       switch (node.nodeName) {
         case 'PRE': return `\`\`\`${node.getElementsByTagName('code')[0].classList[2].split('-')[1]}\n${node.innerText.replace(/^Copy code/g, '').trim()}\n\`\`\``
         default: return `${node.innerHTML}`
       }
-      }).join('\n')
+    }).join('\n')
 
   })
 
   markdown = markdown.filter(b => b)
-    
+
   if (!markdown) return false
-    
+
   let signature = ''
 
   try {
     signature = `***\n###### _Exported by **${__NEXT_DATA__.props.pageProps.user.name}** on ${new Date().toLocaleString()}_`
-  } catch {}
-    
-  const blob = new Blob([markdown.join('\n\n***\n\n') + '\n\n\n' + signature], {type: 'text/plain'})
-    
+  } catch { }
+
+  const blob = new Blob([markdown.join('\n\n***\n\n') + '\n\n\n' + signature], { type: 'text/plain' })
+
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = 'chatgpt-thread_' + (new Date().toLocaleString('en-US', { hour12: false }).replace(/[\s/:]/g, '-').replace(',', '')) + '.md'
@@ -250,7 +249,7 @@ function exportCurrentChat () {
   a.click()
 }
 
-function selectPromptTemplate (idx) {
+function selectPromptTemplate(idx) {
   const templates = window.prompttemplates
   if (!templates || !Array.isArray(templates)) return
 
@@ -278,7 +277,7 @@ function selectPromptTemplate (idx) {
   } else {
     wrapper.innerHTML = ``
     textarea.placeholder = ''
-    window.selectedprompttemplate = null   
+    window.selectedprompttemplate = null
   }
 }
 
@@ -295,17 +294,17 @@ function CSVToArray(strData, strDelimiter) {
   while (matches = pattern.exec(strData)) {
     var delimiter = matches[1];
     if (delimiter.length && delimiter !== strDelimiter) {
-    data.push([]);
+      data.push([]);
     }
     var value = matches[2]
-    ? matches[2].replace(new RegExp("\"\"", "g"), "\"")
-    : matches[3];
+      ? matches[2].replace(new RegExp("\"\"", "g"), "\"")
+      : matches[3];
     data[data.length - 1].push(value);
   }
   return data;
 }
 
-function svg (name) {
+function svg(name) {
   name = Array.isArray(name) ? name[0] : name
   switch (name) {
     case 'Archive': return '<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" height="1em" <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>'
@@ -314,7 +313,7 @@ function svg (name) {
   }
 }
 
-function css (name) {
+function css(name) {
   name = Array.isArray(name) ? name[0] : name
   switch (name) {
     case 'ExportButton': return 'flex py-3 px-3 items-center gap-3 rounded-md hover:bg-gray-500/10 transition-colors duration-200 text-white cursor-pointer text-sm'
