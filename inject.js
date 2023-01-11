@@ -1,89 +1,171 @@
-let PromptPlaceholder = '[INSERT]';
+let PromptPlaceholder = '[PROMPT]';
+let TargetLanguagePlaceholder = '[TARGETLANGUAGE]';
 let PromptFeedURL = '';
+let LanguageFeedURL = '';
 let EndpointConversation = 'https://chat.openai.com/backend-api/conversation';
 let AppShort = 'Mark Llego';
 let AppName = 'Mark Llego ChatGPT Prompts';
-let AppSlogan = 'ChatGPT Prompts for Productive Work';
-let AppURL = 'https://markllego.com/';
-let ExportFilePrefix = 'MarkLlego-export-chatgpt-thread_';
-let ExportHeaderPrefix = '\n```\nExported with Mark Llego ChatGPT Prompts';
+let AppSlogan = 'Mark Llego Optimized ChatGPT Prompts';
+let AppURL = 'https://markllego.com';
+let ExportFilePrefix = 'markllego-export-chatgpt-thread_';
+let ExportHeaderPrefix = '\n```\nExported with Mark Llego https://markllego.com by ';
+let Version = 'markllego';
 
 (() => {
+  // Set default TargetLanguage
+  window.TargetLanguage = 'English';
+
+  // Save a reference to the original fetch function
   const fetch = window._fetch = window._fetch || window.fetch
+  // Replace the fetch function with a modified version that will include a prompt template
+  // if one has been selected by the user
   window.fetch = (...t) => {
+    // If the request is not for the chat backend API, just use the original fetch function
     if (t[0] !== EndpointConversation) return fetch(...t)
 
+    // If no prompt template has been selected, use the original fetch function
     if (!window.selectedprompttemplate) return fetch(...t)
+    // Get the selected prompt template
     const template = window.selectedprompttemplate
 
     try {
+      // Get the options object for the request, which includes the request body
       const options = t[1]
+      // Parse the request body from JSON
       const body = JSON.parse(options.body)
+      // Get the prompt from the request body
       const prompt = body.messages[0].content.parts[0]
-      body.messages[0].content.parts[0] = template.prompt.replace(PromptPlaceholder, prompt)
+      // Replace the prompt in the request body with the selected prompt template,
+      // inserting the original prompt into the template and replacing the target language placeholder
+      body.messages[0].content.parts[0] = template.prompt
+        .replaceAll(PromptPlaceholder, prompt)
+        .replaceAll(TargetLanguagePlaceholder, window.TargetLanguage);
+
+      // Clear the selected prompt template
       selectPromptTemplate(null)
+      // Stringify the modified request body and update the options object
       options.body = JSON.stringify(body)
+      // Use the modified fetch function to make the request
       return fetch(t[0], options)
     } catch {
+      // If there was an error parsing the request body or modifying the request,
+      // just use the original fetch function
       return fetch(...t)
     }
   }
 
+  // Create a new observer for the chat sidebar to watch for changes to the document body
   const observer = new MutationObserver(mutations => {
+    // For each mutation (change) to the document body
     mutations.forEach(mutation => {
+      // If the mutation is not a change to the list of child nodes, skip it
       if (mutation.type !== 'childList')
+        // If no new nodes were added, skip this mutation
         if (mutation.addedNodes.length == 0) return
+      // Get the first added node
       const node = mutation.addedNodes[0]
+      // If the node is not an element or does not have a `querySelector` method, skip it
       if (!node || !node.querySelector) return
+      // Call the `handleElementAdded` function with the added node
       handleElementAdded(node)
     })
   })
 
+  // Start observing the document body for changes
   observer.observe(document.body, { subtree: true, childList: true })
 
 
+  // Get current date and time in ISO format (YYYY-MM-DDTHH:mm)
   const now = new Date();
+  // The cache buster will change only once per minute
   const cacheBuster = btoa(now.toISOString().slice(0, 16).toString(36));
 
+
+  // Fetch the list of prompt templates from a remote CSV file
   fetch(PromptFeedURL + cacheBuster)
+    // Convert the response to text
     .then(res => res.text())
+    // Convert the CSV text to an array of records
     .then(csv => CSVToArray(csv))
+    // Map the records to template objects with properties 'title', 'prompt', and 'placeholder'
     .then(records => {
       return records.map(([category, title, teaser, prompt, placeholder]) => {
         return { category, title, teaser, prompt, placeholder }
       })
+        // Filter out records that do not have a title or it is the header row (with "title" as its title)
         .filter(({ title }) => title && title !== 'title')
     })
     .then(templates => {
+      // Save the array of prompt templates to a global letiable
       window.prompttemplates = templates
+      // Insert the "Prompt Templates" section into the chat interfac
       insertPromptTemplatesSection()
     })
 
+  // Fetch the list of languages from a remote CSV file
+  fetch(LanguageFeedURL + cacheBuster)
+    // Convert the response to text
+    .then(res => res.text())
+    // Convert the CSV text to an array of records
+    .then(csv => CSVToArray(csv))
+    // Map the records to language objects with properties 'langcode', 'languageEnglish' and 'languageLabel'
+    .then(records => {
+      return records.map(([langcode, languageEnglish, languageLabel]) => {
+        return { langcode, languageEnglish, languageLabel }
+      })
+        // Filter out records that do not have a language code, or it is the header row (with "langcode" as its title)
+        .filter(({ langcode }) => langcode && langcode !== 'langcode')
+    })
+    .then(languages => {
+      // Save the array of languages to a global letiable
+      window.languages = languages
+
+      // Insert language select and continue button above the prompt textarea input
+      insertLanguageSelect()
+    });
+
+  // Set up the Sidebar (by adding "Export Chat" button and other stuff)
   setupSidebar()
 })()
 
+// This function is called for each new element added to the document body
 function handleElementAdded(e) {
+  // If the element added is the root element for the chat sidebar, set up the sidebar
   if (e.id === 'headlessui-portal-root') {
     setupSidebar()
     return
   }
 
+  // Disable "Export Button" when no chat were started.
+  // Insert "Prompt Templates" section to the main page.
+  // Insert language select and continue button above the prompt textarea input
   if (e.querySelector('h1.text-4xl')) {
     insertPromptTemplatesSection()
     const button = document.getElementById('export-button')
     if (button) button.style = 'pointer-events: none;opacity: 0.5'
+
+    insertLanguageSelect();
   }
 
+  // Enable "Export Button" when a new chat started.
+  // Insert language select and continue button above the prompt textarea input
   if (document.querySelector('.xl\\:max-w-3xl')) {
     const button = document.getElementById('export-button')
     if (button) button.style = ''
+
+    insertLanguageSelect();
   }
 
 }
 
+// This function sets up the chat sidebar by adding an "Export Button" and modifying
+// the "New Chat" buttons to clear the selected prompt template when clicked
 function setupSidebar() {
+  // Add the "Export Button" to the sidebar
   addExportButton()
+  // Get the "New Chat" buttons
   const buttons = getNewChatButtons()
+  // Set the onclick event for each button to clear the selected prompt template
   buttons.forEach(button => {
     button.onclick = () => {
       selectPromptTemplate(null)
@@ -91,69 +173,99 @@ function setupSidebar() {
   })
 }
 
+// This function adds an "Export Button" to the sidebar
 function addExportButton() {
+  // Get the nav element in the sidebar
   const nav = document.querySelector('nav')
+  // If there is no nav element or the "Export Button" already exists, skip
   if (!nav || nav.querySelector('#export-button')) return
 
+  // Create the "Export Button" element
   const button = document.createElement('a')
   button.id = 'export-button'
   button.className = css`ExportButton`
-  button.innerHTML = `${svg`Export`} Export Chat`
+  button.innerHTML = `${svg`Export`} Export Content`
   button.onclick = exportCurrentChat
 
+  // If there is no chat started, disable the button 
   if (document.querySelector('.flex-1.overflow-hidden h1')) {
     button.style = 'pointer-events: none;opacity: 0.5'
   }
 
+  // Get the Log out button as a reference 
   const colorModeButton = [...nav.children].find(child => child.innerText.includes('Log out'))
+  // Insert the "Export Button" before the "Color Mode" button
   nav.insertBefore(button, colorModeButton)
 
-
+  // Create the "Version" element
   const version = document.createElement('a')
-  version.id = 'AppName'
+  version.id = `Version`
   version.className = css`VersionInfo`
-  version.innerHTML = `${svg`Rocket`}` + `markllego.com`
+  version.innerHTML = `${svg`Rocket`}` + Version + ` v1.0.0`
+  //version.onclick = exportCurrentChat
   version.href = AppURL
 
+  // Get the Log out button as a reference 
   colorModeButton2 = [...nav.children].find(child => child.innerText.includes('Log out'))
+  // Insert the "Export Button" before the "Color Mode" button
 
   nav.insertBefore(version, colorModeButton2)
 
 }
 
+// This function gets the "New Chat" buttons
 function getNewChatButtons(callback) {
+  // Get the sidebar and topbar elements
   const sidebar = document.querySelector('nav')
   const topbar = document.querySelector('.sticky')
+  // Get the "New Chat" button in the sidebar
   const newChatButton = [...sidebar?.querySelectorAll('.cursor-pointer') ?? []].find(e => e.innerText === 'New Chat')
+  // Get the "Plus" button in the topbar
   const AddButton = topbar?.querySelector("button.px-3")
+  // Return an array containing the buttons, filtering out any null elements
   return [newChatButton, AddButton].filter(button => button)
 }
 
+// This object contains properties for the prompt templates section
 const promptTemplateSection = {
-  currentPage: 0,
-  pageSize: 5
+  currentPage: 0, // The current page number
+  pageSize: 2 // The number of prompt templates per page
 }
 
+
+// This function inserts a section containing a list of prompt templates into the chat interface
 function insertPromptTemplatesSection() {
+  // Get the title element (as a reference point and also for some alteration)
   const title = document.querySelector('h1.text-4xl')
+  // If there is no title element, return
   if (!title) return
 
+  // Style the title element and set it to "ChatGPT for SEO"
   title.style = 'text-align: center; margin-top: 4rem'
   title.innerHTML = AppName
 
+  // Get the list of prompt templates
   const templates = window.prompttemplates
+  // If there are no templates, skip
   if (!templates) return
 
+  // Get the parent element of the title element (main page)
   const parent = title.parentElement
+  // If there is no parent element, skip
   if (!parent) return
 
+  // Remove the "md:h-full" class from the parent element
   parent.classList.remove('md:h-full')
 
+  // Get the current page number and page size from the promptTemplateSection object
   const { currentPage, pageSize } = promptTemplateSection
+  // Calculate the start and end indices of the current page of prompt templates
   const start = pageSize * currentPage
   const end = Math.min(pageSize * (currentPage + 1), templates.length)
+  // Get the current page of prompt templates
   const currentTemplates = window.prompttemplates.slice(start, end)
 
+  // Create the HTML for the prompt templates section
   const html = `
     <div class="${css`column`}">
     
@@ -163,7 +275,9 @@ function insertPromptTemplatesSection() {
       ${currentTemplates.map((template, i) => `
         <button onclick="selectPromptTemplate(${start + i})" class="${css`card`}">
           <h3 class="${css`h3`}">${template.title}</h3>
-          <p class="${css`p`}">${template.teaser
+          <p class="${css`p`}">${
+    // template.prompt.replace('[INSERT]', template.placeholder)
+    template.teaser
     }</p>
         </button>
       `).join('')}
@@ -194,9 +308,125 @@ function insertPromptTemplatesSection() {
   wrapper.innerHTML = html
 }
 
+// Insert language select and continue button above the prompt textarea input
+function insertLanguageSelect() {
+  let wrapper = document.createElement('div')
+
+  wrapper.id = 'language-select-wrapper'
+  wrapper.className = css('languageSelectWrapper')
+
+  // Get the list of languages
+  const languages = window.languages
+
+  // If there are no languages, skip
+  if (!languages) return
+
+  // Get the prompt textarea input
+  const textarea = document.querySelector('form textarea');
+
+  // If there is no textarea, skip
+  if (!textarea) return
+
+  // Get the parent of the form element for the textarea
+  const parent = textarea.form.parentElement;
+
+  // If there is no parent element, skip
+  if (!parent) return
+
+  // Get existing language select wrapper or create a new one
+  if (parent.querySelector(`#${wrapper.id}`)) {
+    wrapper = parent.querySelector(`#${wrapper.id}`)
+  } else {
+    parent.prepend(wrapper)
+  }
+
+  // Create the HTML for the language select section
+  const html = `
+    <div>
+      <label for="languageSelect" class="${css('languageSelectLabel')}">Language Output</label>
+      
+      <select id="languageSelect" class="${css('languageSelect')}">
+        ${window.languages.map((language) => `
+          <option value="${language.languageEnglish}" ${window.TargetLanguage === language.languageEnglish ? ' selected' : ''}>
+            ${language.languageLabel}
+            </option> 
+        `).join('')}
+      </select>
+    </div>
+    
+    <div>
+      <button title="Could you please continue writing the article?" class="${css('continueButton')}" onclick="continueWriting()">
+        Continue
+      </button> 
+    </div>
+
+    <div>
+      <button title="Continue writing where you cut off" class="${css('cutoffButton')}" onclick="cutoffWriting()">
+        Cutoff
+      </button>
+    </div>
+
+    <div>
+      <button title="Write a short persuasive call to action on the topic above" class="${css('persuasiveButton')}" onclick="persuasiveWriting()">
+        Persuasive
+      </button>
+    </div>
+  `
+
+  wrapper.innerHTML = html
+
+  // Add event listener to language select to update the target language on change
+  wrapper.querySelector('#languageSelect').addEventListener('change', changeTargetLanguage);
+}
+
+// Change the TargetLanguage on selection change
+function changeTargetLanguage(event) {
+  window.TargetLanguage = event.target.value;
+}
+
+// Ask ChatGPT to continue writing
+function continueWriting() {
+  const textarea = document.querySelector('form textarea');
+
+  // Add "Could you please continue writing the article?" prompt to the textarea
+  textarea.value = "Could you please continue writing the article?";
+  textarea.focus();
+
+  // Click the "Submit" button
+  const button = document.querySelector('form button');
+  button.click();
+}
+
+// Ask ChatGPT to write persuasive call to action
+function persuasiveWriting() {
+  const textarea = document.querySelector('form textarea');
+
+  // Add "write a short persuasive call to action on the topic above" prompt to the textarea
+  textarea.value = "write a short persuasive call to action on the topic above";
+  textarea.focus();
+
+  // Click the "Submit" button
+  const button = document.querySelector('form button');
+  button.click();
+}
+
+// Ask ChatGPT to continue writing where you cut off
+function cutoffWriting() {
+  const textarea = document.querySelector('form textarea');
+
+  // Add "write a short persuasive call to action on the topic above" prompt to the textarea
+  textarea.value = "continue writing where you cut off";
+  textarea.focus();
+
+  // Click the "Submit" button
+  const button = document.querySelector('form button');
+  button.click();
+}
+
 function prevPromptTemplatesPage() {
   promptTemplateSection.currentPage--
   promptTemplateSection.currentPage = Math.max(0, promptTemplateSection.currentPage)
+  // Update the section
   insertPromptTemplatesSection()
 }
 
@@ -212,6 +442,7 @@ function nextPromptTemplatesPage() {
     ),
     promptTemplateSection.currentPage
   )
+  // Update the section
   insertPromptTemplatesSection()
 }
 
@@ -224,9 +455,12 @@ function exportCurrentChat() {
       return ''
     }
 
+    // probably a user's, so..
     if (wrapper.children.length === 0) {
       return '**User:**\n' + wrapper.innerText
     }
+
+    // pass this point is assistant's
 
     wrapper = wrapper.firstChild
 
@@ -253,13 +487,17 @@ function exportCurrentChat() {
 
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
+  //a.download = 'chatgpt-thread_' + (new Date().toLocaleString('en-US', { hour12: false }).replace(/[\s/:]/g, '-').replace(',', '')) + '.md'
   a.download = ExportFilePrefix + new Date().toISOString() + '.md';
   document.body.appendChild(a)
   a.click()
 }
 
+// This function selects a prompt template
 function selectPromptTemplate(idx) {
+  // Get the list of prompt templates 
   const templates = window.prompttemplates
+  // If there are no templates, skip
   if (!templates || !Array.isArray(templates)) return
 
   const template = templates[idx]
@@ -338,8 +576,14 @@ function css(name) {
     case 'paginationText': return 'text-sm text-gray-700 dark:text-gray-400'
     case 'paginationNumber': return 'font-semibold text-gray-900 dark:text-white'
     case 'paginationButtonGroup': return 'inline-flex mt-2 xs:mt-0'
-    case 'paginationButton': return 'px-4 py-2  font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400 dark:hover:text-white'
+    case 'paginationButton': return 'px-4 py-2 font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400 dark:hover:text-white'
+    case 'continueButton': return 'px-4 py-2 font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400 dark:hover:text-white rounded bg-gray disabled:text-gray-300 disabled:hover:bg-transparent'
+    case 'persuasiveButton': return 'px-4 py-2 font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400 dark:hover:text-white rounded bg-gray disabled:text-gray-300 disabled:hover:bg-transparent'
+    case 'cutoffButton': return 'px-4 py-2 font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400 dark:hover:text-white rounded bg-gray disabled:text-gray-300 disabled:hover:bg-transparent'
     case 'action': return 'p-1 rounded-md hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 disabled:dark:hover:text-gray-400 md:invisible md:group-hover:visible'
     case 'tag': return 'inline-flex items-center py-1 px-2 mr-2 mb-2 text-sm font-medium text-white rounded bg-gray-600 whitespace-nowrap'
+    case 'languageSelectWrapper': return 'flex flex-row gap-3 lg:max-w-3xl lg:mx-auto md:last:mb-6 mx-2 pt-2 stretch justify-between text-sm items-end lg:-mb-4'
+    case 'languageSelect': return 'bg-gray-100 border-0 text-sm rounded block w-full dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white hover:bg-gray-200 focus:ring-0';
+    case 'languageSelectLabel': return 'block text-sm font-medium';
   }
 }
